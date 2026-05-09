@@ -2,6 +2,6 @@
 set -euo pipefail
 
 echo "signaldemo started with $$"
-pstree -pls "$$" || pstree -pl || true
+pstree -gpls "$$" || pstree -gpl || true
 echo "Sleeping for 300 seconds..."
 sleep 300

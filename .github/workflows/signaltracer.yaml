@@ -17,6 +17,10 @@ jobs:
       - name: Build signaltracer
         run: go build -o signaltracer ./cmd/signaltracer
 
+      - name: Show how bash is executed
+        run: |
+          ps auxwww
+
       - name: Run nested signaltracer (cancel this run to observe signals)
         run: |
           chmod +x signaldemo.sh
