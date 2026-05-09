@@ -1,0 +1,23 @@
+name: signaltracer
+
+on:
+  workflow_dispatch:
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build signaltracer
+        run: go build -o signaltracer ./cmd/signaltracer
+
+      - name: Run nested signaltracer (cancel this run to observe signals)
+        run: |
+          chmod +x signaldemo.sh
+          exec ./signaltracer ./signaltracer bash signaldemo.sh
