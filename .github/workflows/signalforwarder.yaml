@@ -21,6 +21,7 @@ jobs:
         run: go build -o signalforwarder ./cmd/signalforwarder
 
       - name: Run signalforwarder + nested signaltracer (cancel this run to observe signals)
+        shell: ./signalforwarder -e {0}
         run: |
           chmod +x signaldemo.sh
-          exec ./signalforwarder INT,TERM ./signaltracer ./signaltracer bash signaldemo.sh
+          exec ./signaltracer ./signaltracer bash signaldemo.sh

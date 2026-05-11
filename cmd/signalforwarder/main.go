@@ -15,30 +15,17 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "usage: signalforwarder SIGNAL[,SIGNAL...] <command> [args...]")
-		os.Exit(2)
+	sigs := []syscall.Signal{syscall.SIGINT, syscall.SIGTERM}
+	if env := os.Getenv("FORWARDSIGNAL"); env != "" {
+		var err error
+		sigs, err = parseSignals(env)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "signalforwarder: FORWARDSIGNAL: %v\n", err)
+			os.Exit(2)
+		}
 	}
 
-	sigs, err := parseSignals(os.Args[1])
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "signalforwarder: %v\n", err)
-		os.Exit(2)
-	}
-
-	name := os.Args[2]
-	args := os.Args[3:]
-
-	var forwarded sync.Map // syscall.Signal -> struct{}
-
-	sigCh := make(chan os.Signal, 8)
-	var notify []os.Signal
-	for _, s := range sigs {
-		notify = append(notify, s)
-	}
-	signal.Notify(sigCh, notify...)
-
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command("bash", os.Args[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -46,8 +33,16 @@ func main() {
 		Setpgid: true,
 	}
 
+	var forwarded sync.Map
+	sigCh := make(chan os.Signal, 8)
+	var notify []os.Signal
+	for _, s := range sigs {
+		notify = append(notify, s)
+	}
+	signal.Notify(sigCh, notify...)
+
 	if err := cmd.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "signalforwarder: start: %v\n", err)
+		fmt.Fprintf(os.Stderr, "signalforwarder: start bash: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -59,6 +54,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	setForegroundPGID(childPGID)
+
+	fmt.Printf("signalforwarder: started bash pid=%d pgid=%d, self pid=%d\n", childPID, childPGID, os.Getpid())
+
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 
@@ -67,15 +66,17 @@ func main() {
 		case sig := <-sigCh:
 			ss := sig.(syscall.Signal)
 			if _, dup := forwarded.LoadOrStore(ss, struct{}{}); dup {
-				fmt.Printf("signalforwarder: received %v at %s pid=%d (already forwarded, skipping)\n", sig, time.Now().Format(time.RFC3339Nano), os.Getpid())
+				fmt.Printf("signalforwarder: received %v at %s pid=%d (already forwarded, skipping)\n",
+					sig, time.Now().Format(time.RFC3339Nano), os.Getpid())
 				continue
 			}
 
 			pgid, psrc := foregroundPGID(childPGID)
-			fmt.Printf("signalforwarder: received %v at %s pid=%d forwarding to pgid=%d (%s)\n", sig, time.Now().Format(time.RFC3339Nano), os.Getpid(), pgid, psrc)
+			fmt.Printf("signalforwarder: received %v at %s pid=%d forwarding to pgid=%d (%s)\n",
+				sig, time.Now().Format(time.RFC3339Nano), os.Getpid(), pgid, psrc)
 
 			if err := syscall.Kill(-pgid, ss); err != nil {
-				fmt.Fprintf(os.Stderr, "signalforwarder: kill -%d %v: %v\n", pgid, ss, err)
+				fmt.Fprintf(os.Stderr, "signalforwarder: kill(-%d, %v): %v\n", pgid, ss, err)
 			}
 
 		case err := <-done:
@@ -91,6 +92,16 @@ func main() {
 			return
 		}
 	}
+}
+
+func setForegroundPGID(pgid int) {
+	for _, fd := range []int{int(os.Stdin.Fd()), int(os.Stdout.Fd()), int(os.Stderr.Fd())} {
+		if err := unix.IoctlSetPointerInt(fd, unix.TIOCSPGRP, pgid); err == nil {
+			fmt.Printf("signalforwarder: tcsetpgrp fd=%d pgid=%d\n", fd, pgid)
+			return
+		}
+	}
+	fmt.Printf("signalforwarder: tcsetpgrp unavailable (no tty), will forward to child pgid=%d\n", pgid)
 }
 
 func foregroundPGID(fallbackChildPGID int) (pgid int, source string) {
