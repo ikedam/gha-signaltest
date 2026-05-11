@@ -18,10 +18,13 @@ jobs:
         run: go build -o signaltracer ./cmd/signaltracer
 
       - name: Build signalforwarder
-        run: go build -o signalforwarder ./cmd/signalforwarder
+        run: |
+          mkdir signalforwarder
+          go build -o signalforwarder/signalforwarder ./cmd/signalforwarder
+          echo "PATH=$PWD/signalforwarder:$PATH" >> $GITHUB_ENV
 
       - name: Run signalforwarder + nested signaltracer (cancel this run to observe signals)
-        shell: ./signalforwarder -e {0}
+        shell: signalforwarder -e {0}
         run: |
           chmod +x signaldemo.sh
           exec ./signaltracer ./signaltracer bash signaldemo.sh
