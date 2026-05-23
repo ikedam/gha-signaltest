@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -16,8 +15,6 @@ import (
 )
 
 func main() {
-	log.Printf("signalforwarder: argv=%q\n", os.Args)
-
 	sigs := []syscall.Signal{syscall.SIGINT, syscall.SIGTERM}
 	if env := os.Getenv("FORWARDSIGNAL"); env != "" {
 		var err error
