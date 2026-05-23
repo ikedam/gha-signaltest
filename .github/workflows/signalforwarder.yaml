@@ -23,6 +23,14 @@ jobs:
           go build -o signalforwarder/signalforwarder ./cmd/signalforwarder
           echo "PATH=$PWD/signalforwarder:$PATH" >> $GITHUB_ENV
 
+      - name: Test signalforwarder
+        run: |
+          set -x
+          set +e
+          echo $PATH
+          which signalforwarder
+          signalforwarder -c true
+
       - name: Run signalforwarder + nested signaltracer (cancel this run to observe signals)
         shell: signalforwarder -e {0}
         run: |
