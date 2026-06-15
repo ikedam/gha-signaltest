@@ -1,0 +1,27 @@
+project_name: signalforwarder
+
+builds:
+  - id: signalforwarder
+    main: ./cmd/signalforwarder
+    binary: signalforwarder
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+archives:
+  - id: default
+    builds:
+      - signalforwarder
+    format: binary
+    name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}'
+
+checksum:
+  name_template: '{{ .ProjectName }}_{{ .Version }}_checksums.txt'
